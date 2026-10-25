@@ -1,0 +1,31 @@
+# 독립 스택: Cloudflare Tunnel → nginx → app. 호스트 포트는 열지 않는다.
+# 같은 폴더의 .env를 앱 환경변수(env_file)와 TUNNEL_TOKEN·DOCKERHUB_USERNAME 치환에 함께 쓴다.
+# 터널 라우트(Cloudflare 대시보드): gloria-homework.site, www.gloria-homework.site → http://nginx:80
+
+name: english-homework
+
+services:
+  app:
+    image: ${DOCKERHUB_USERNAME}/do-your-english-homework:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - TZ=Asia/Seoul
+    volumes:
+      # SQLite DB + 업로드한 수업 사진
+      - ./data:/code/data
+
+  nginx:
+    image: nginx:1.29-alpine
+    restart: unless-stopped
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+  tunnel:
+    image: cloudflare/cloudflared:2025.8.0
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - nginx
