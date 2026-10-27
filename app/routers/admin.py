@@ -104,8 +104,9 @@ async def create_week(session: SessionDep, files: Annotated[list[UploadFile], Fi
     return _week_out(week)
 
 
+# start_extraction이 이벤트 루프에 태스크를 거니까 async여야 한다 (sync면 스레드풀에서 돌아 루프가 없다)
 @protected.post("/weeks/{week_id}/reextract")
-def reextract(week_id: int, session: SessionDep):
+async def reextract(week_id: int, session: SessionDep):
     week = _get_week(session, week_id)
     if week.status == "processing":
         raise HTTPException(409, "이미 추출 중이에요")

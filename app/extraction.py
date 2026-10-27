@@ -19,6 +19,8 @@ from app.settings import settings
 log = logging.getLogger(__name__)
 
 MAX_EDGE = 2000
+# Read 결과로 이미지가 base64로 실려 와서, 여러 장을 한 번에 읽으면 SDK 기본 버퍼(1MB)를 넘는다
+MAX_BUFFER_BYTES = 32 * 1024 * 1024
 
 CONTENT_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -131,6 +133,7 @@ async def extract_content(image_dir: Path, images: list[str]) -> dict[str, Any]:
         allowed_tools=["Read"],
         output_format={"type": "json_schema", "schema": CONTENT_SCHEMA},
         max_turns=15,
+        max_buffer_size=MAX_BUFFER_BYTES,
         model=settings.claude_model,
         cli_path=settings.claude_cli_path,
     )

@@ -113,6 +113,21 @@ def test_admin_content_validation(client):
     assert client.put(f"/api/admin/weeks/{week_id}/content", json=edited).json()["title"] == "Week 50"
 
 
+def test_reextract_starts_task(client, monkeypatch):
+    calls = []
+
+    async def fake_run(week_id):
+        calls.append(week_id)
+
+    monkeypatch.setattr("app.extraction.run_extraction", fake_run)
+    week_id = _ready_week()
+    _admin_login(client)
+    r = client.post(f"/api/admin/weeks/{week_id}/reextract")
+    assert r.status_code == 200 and r.json()["status"] == "processing"
+    assert client.post(f"/api/admin/weeks/{week_id}/reextract").status_code == 409
+    assert calls == [week_id]
+
+
 def _ffmpeg_works() -> bool:
     import subprocess
 
