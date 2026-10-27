@@ -1,6 +1,7 @@
 """주차 콘텐츠 구조와, 그 위에서 도는 숙제 완료 판정 / 플래시카드(SRS) 로직."""
 
 from datetime import datetime, timedelta
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -31,7 +32,10 @@ class HomeworkWord(_Strict):
 class Homework(_Strict):
     title: str
     words: list[HomeworkWord]
-    script: str
+    # 녹음 숙제: read = 스크립트 따라 읽기(script), answer = 질문에 대답하기(questions)
+    recording_type: Literal["read", "answer"] = "read"
+    script: str = ""
+    questions: list[str] = []
 
 
 class WeekContent(_Strict):

@@ -44,7 +44,13 @@ export type HomeworkWord = { word: string; hint: string; meaning: string }
 export type WeekContent = {
   week_title: string
   study_sets: StudySet[]
-  homework: { title: string; words: HomeworkWord[]; script: string }
+  homework: {
+    title: string
+    words: HomeworkWord[]
+    recording_type: 'read' | 'answer'
+    script: string
+    questions: string[]
+  }
 }
 
 export type HomeworkStatus = { words: boolean; recording: boolean; diary: boolean; completed: boolean }

@@ -113,6 +113,20 @@ def test_admin_content_validation(client):
     assert client.put(f"/api/admin/weeks/{week_id}/content", json=edited).json()["title"] == "Week 50"
 
 
+def test_recording_type(client):
+    week_id = _ready_week()  # recording_type 없는 예전 콘텐츠
+    _member_client(client)
+    hw = client.get(f"/api/weeks/{week_id}").json()["content"]["homework"]
+    assert hw["recording_type"] == "read" and hw["questions"] == []
+
+    _admin_login(client)
+    answer_hw = {**SAMPLE_CONTENT["homework"], "recording_type": "answer", "script": "", "questions": ["What is rich?"]}
+    r = client.put(f"/api/admin/weeks/{week_id}/content", json={**SAMPLE_CONTENT, "homework": answer_hw})
+    assert r.json()["content"]["homework"]["questions"] == ["What is rich?"]
+    bad_hw = {**answer_hw, "recording_type": "sing"}
+    assert client.put(f"/api/admin/weeks/{week_id}/content", json={**SAMPLE_CONTENT, "homework": bad_hw}).status_code == 422
+
+
 def test_reextract_starts_task(client, monkeypatch):
     calls = []
 

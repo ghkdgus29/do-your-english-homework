@@ -55,7 +55,7 @@ CONTENT_SCHEMA: dict[str, Any] = {
         "homework": {
             "type": "object",
             "additionalProperties": False,
-            "required": ["title", "words", "script"],
+            "required": ["title", "words", "recording_type", "script", "questions"],
             "properties": {
                 "title": {"type": "string"},
                 "words": {
@@ -71,7 +71,9 @@ CONTENT_SCHEMA: dict[str, Any] = {
                         },
                     },
                 },
+                "recording_type": {"type": "string", "enum": ["read", "answer"]},
                 "script": {"type": "string"},
+                "questions": {"type": "array", "items": {"type": "string"}},
             },
         },
     },
@@ -105,7 +107,9 @@ homework (숙제지)
   - word: 영어 단어/표현.
   - hint: meaning 칸에 미리 인쇄돼 있는 힌트(예: "동사"). 없으면 "".
   - meaning: 학생이 정답 확인용으로 볼 간결한 한국어 뜻. hint가 있으면 그 품사의 뜻으로. (예: last + 동사 → "지속되다, 계속되다")
-- script: 녹음용 스크립트 본문 전체 (제목 "녹음: Read!" 제외, 줄바꿈 없이 한 문단).
+- 녹음 숙제는 두 종류야. "녹음:" 뒤 지시문을 보고 분류해.
+  - "Read!"처럼 스크립트를 따라 읽는 숙제 → recording_type "read", script에 본문 전체 (제목 제외, 줄바꿈 없이 한 문단), questions는 [].
+  - "Answer the questions!"처럼 질문에 대답하는 숙제 → recording_type "answer", questions에 질문을 글머리 기호 한 줄당 1개씩 (한 줄에 질문이 여러 개면 그대로 한 항목), script는 "".
 
 week_title: 외우기 자료 제목에서 주차를 뽑아 짧게 (예: "Week 49"). 없으면 숙제지 수업 날짜.
 """
