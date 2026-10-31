@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     claude_model: str | None = None
     # 비어 있으면 SDK에 번들된 claude CLI 사용
     claude_cli_path: str | None = None
+    # 파일 로그 상한: 파일 하나 최대 MB, 보관 개수 (총 log_max_mb × (log_backups + 1))
+    log_max_mb: int = 10
+    log_backups: int = 5
 
     @property
     def db_path(self) -> Path:
@@ -24,6 +27,10 @@ class Settings(BaseSettings):
     @property
     def upload_dir(self) -> Path:
         return self.data_dir / "uploads"
+
+    @property
+    def log_dir(self) -> Path:
+        return self.data_dir / "logs"
 
 
 settings = Settings()  # type: ignore[call-arg]

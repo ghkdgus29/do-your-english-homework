@@ -169,12 +169,12 @@ export function Homework({ week, memberName }: { week: WeekDetail; memberName: s
       </section>
 
       <section className="panel">
-        {hw.recording_type === 'answer' ? (
+        {hw.recording.type === 'answer' ? (
           <>
             <h2>2. ANSWER! {status.recording && '✓'}</h2>
             <p className="muted">질문에 영어로 대답하면서 녹음하세요. 대본 없이 말해 보기!</p>
             <ol className="script questions">
-              {hw.questions.map((q, i) => (
+              {hw.recording.questions.map((q, i) => (
                 <li key={i}>{q}</li>
               ))}
             </ol>
@@ -183,7 +183,7 @@ export function Homework({ week, memberName }: { week: WeekDetail; memberName: s
           <>
             <h2>2. READ ALOUD {status.recording && '✓'}</h2>
             <p className="muted">스크립트를 소리 내어 읽으면서 녹음하세요.</p>
-            <p className="script">{hw.script}</p>
+            <p className="script">{hw.recording.script}</p>
           </>
         )}
         <Recorder

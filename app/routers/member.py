@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
-from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import select
 
 from app.auth import CurrentMember, SessionDep, set_member_cookie
@@ -61,7 +60,6 @@ def _save_answer(session: SessionDep, answer: HomeworkAnswer, content: WeekConte
     if status["completed"] and answer.completed_at is None:
         answer.completed_at = utcnow()
     answer.updated_at = utcnow()
-    flag_modified(answer, "words")
     session.add(answer)
     session.commit()
     session.refresh(answer)
@@ -116,13 +114,10 @@ def save_answer(week_id: int, body: AnswerIn, member: CurrentMember, session: Se
     _, content = _ready_week(session, week_id)
     answer = _answer_or_new(session, member, week_id)
     if body.words:
-        words = dict(answer.words)
         for idx, w in body.words.items():
             if not idx.isdigit() or int(idx) >= len(content.homework.words):
                 raise HTTPException(400, f"없는 단어 번호: {idx}")
-            prev = words.get(idx) or {}
-            words[idx] = {"meaning": w.meaning, "sentence": w.sentence, "peeks": prev.get("peeks", 0)}
-        answer.words = words
+            answer.set_word(int(idx), w.meaning, w.sentence)
     if body.diary is not None:
         answer.diary = body.diary
     return _save_answer(session, answer, content)
@@ -138,11 +133,7 @@ def peek(week_id: int, body: PeekIn, member: CurrentMember, session: SessionDep)
     if not 0 <= body.index < len(content.homework.words):
         raise HTTPException(400, "없는 단어 번호")
     answer = _answer_or_new(session, member, week_id)
-    words = dict(answer.words)
-    entry = dict(words.get(str(body.index)) or {"meaning": "", "sentence": "", "peeks": 0})
-    entry["peeks"] = entry.get("peeks", 0) + 1
-    words[str(body.index)] = entry
-    answer.words = words
+    answer.add_peek(body.index)
     return _save_answer(session, answer, content)
 
 

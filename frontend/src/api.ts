@@ -41,15 +41,15 @@ export const api = {
 export type StudyItem = { phrase: string; meaning: string; example: string }
 export type StudySet = { title: string; items: StudyItem[] }
 export type HomeworkWord = { word: string; hint: string; meaning: string }
+// read = 스크립트 따라 읽기(script), answer = 질문에 대답하기(questions)
+export type Recording = { type: 'read' | 'answer'; script: string; questions: string[] }
 export type WeekContent = {
   week_title: string
   study_sets: StudySet[]
   homework: {
     title: string
     words: HomeworkWord[]
-    recording_type: 'read' | 'answer'
-    script: string
-    questions: string[]
+    recording: Recording
   }
 }
 

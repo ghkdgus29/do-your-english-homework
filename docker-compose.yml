@@ -4,8 +4,17 @@
 
 name: english-homework
 
+# 도커 로그 상한 (기본 json-file은 무제한). 앱 로그는 data/logs/app.log에도 따로 남는다.
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 services:
   app:
+    <<: *logging
     image: ${DOCKERHUB_USERNAME}/do-your-english-homework:latest
     restart: unless-stopped
     env_file: .env
@@ -16,12 +25,15 @@ services:
       - ./data:/code/data
 
   nginx:
+    <<: *logging
     image: nginx:1.29-alpine
     restart: unless-stopped
     volumes:
+      # bind mount는 설정 해시에 반영되지 않으므로 nginx.conf를 수정하면, 컨테이너를 수동으로 재시작해야 반영된다.
       - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
   tunnel:
+    <<: *logging
     image: cloudflare/cloudflared:2026.10.3
     restart: unless-stopped
     command: tunnel --no-autoupdate run

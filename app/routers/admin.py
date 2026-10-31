@@ -1,3 +1,4 @@
+import asyncio
 import shutil
 import tempfile
 from pathlib import Path
@@ -8,7 +9,13 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ValidationError
 from sqlmodel import delete, select
 
-from app.auth import ADMIN_COOKIE, SessionDep, check_admin_password, require_admin, set_admin_cookie
+from app.auth import (
+    ADMIN_COOKIE,
+    SessionDep,
+    check_admin_password,
+    require_admin,
+    set_admin_cookie,
+)
 from app.content import WeekContent
 from app.extraction import prepare_images, start_extraction
 from app.models import CardReview, HomeworkAnswer, Member, Week, new_token
@@ -17,7 +24,7 @@ from app.settings import settings
 router = APIRouter(prefix="/api/admin")
 protected = APIRouter(dependencies=[Depends(require_admin)])
 
-MAX_IMAGES = 5
+MAX_IMAGES = 10
 MAX_IMAGE_BYTES = 25 * 1024 * 1024
 
 
@@ -72,14 +79,8 @@ def list_weeks(session: SessionDep):
     return [_week_out(w) for w in weeks]
 
 
-@protected.post("/weeks")
-async def create_week(session: SessionDep, files: Annotated[list[UploadFile], File()]):
-    if not 1 <= len(files) <= MAX_IMAGES:
-        raise HTTPException(400, f"사진은 1~{MAX_IMAGES}장")
-    blobs = [await f.read() for f in files]
-    if any(len(b) > MAX_IMAGE_BYTES for b in blobs):
-        raise HTTPException(400, "사진이 너무 커요 (25MB 이하)")
-
+def _store_week(session: SessionDep, blobs: list[bytes]) -> Week:
+    """빈 주차를 INSERT해 id를 받고, 그 id 폴더에 사진을 보정·저장한다. DB와 Pillow라 블로킹."""
     week = Week()
     session.add(week)
     session.commit()
@@ -100,19 +101,37 @@ async def create_week(session: SessionDep, files: Annotated[list[UploadFile], Fi
             raise HTTPException(400, "이미지를 읽을 수 없어요 (jpg/png)")
     session.add(week)
     session.commit()
-    start_extraction(week.id)
+    return week
+
+
+# create_week·reextract는 start_extraction이 이벤트 루프에 태스크를 걸어야 해서 async다
+# (sync면 스레드풀에서 돌아 루프가 없다). 대신 DB·Pillow 같은 블로킹 작업은 to_thread로 넘긴다.
+@protected.post("/weeks")
+async def create_week(session: SessionDep, files: Annotated[list[UploadFile], File()]):
+    if not 1 <= len(files) <= MAX_IMAGES:
+        raise HTTPException(400, f"사진은 1~{MAX_IMAGES}장")
+    blobs = [await f.read() for f in files]
+    if any(len(b) > MAX_IMAGE_BYTES for b in blobs):
+        raise HTTPException(400, "사진이 너무 커요 (25MB 이하)")
+
+    week = await asyncio.to_thread(_store_week, session, blobs)
+    start_extraction(week.id)  # type: ignore[arg-type]
     return _week_out(week)
 
 
-# start_extraction이 이벤트 루프에 태스크를 거니까 async여야 한다 (sync면 스레드풀에서 돌아 루프가 없다)
-@protected.post("/weeks/{week_id}/reextract")
-async def reextract(week_id: int, session: SessionDep):
+def _mark_processing(session: SessionDep, week_id: int) -> Week:
     week = _get_week(session, week_id)
     if week.status == "processing":
         raise HTTPException(409, "이미 추출 중이에요")
     week.status, week.error = "processing", None
     session.add(week)
     session.commit()
+    return week
+
+
+@protected.post("/weeks/{week_id}/reextract")
+async def reextract(week_id: int, session: SessionDep):
+    week = await asyncio.to_thread(_mark_processing, session, week_id)
     start_extraction(week_id)
     return _week_out(week)
 

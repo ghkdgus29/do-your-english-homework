@@ -64,6 +64,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5173 (/api는 800
 
 - 서버에서 직접 다루기: `cd ~/do-your-english-homework && docker compose logs -f app` (`restart`, `down`도 같은 폴더에서). `.env`가 서버에 남아 있어서 그대로 동작한다.
 - `~/do-your-english-homework/data`가 DB와 사진 볼륨이다. 백업 대상이다.
+- 로그는 두 곳에 남는다. `docker compose logs`(컨테이너 재생성 시 사라짐, 서비스당 10MB×3으로 제한)와 `data/logs/app.log`(볼륨이라 남음, 10MB×6으로 로테이션. `LOG_MAX_MB`, `LOG_BACKUPS`로 조정).
 
 ## 사용 흐름
 

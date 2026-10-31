@@ -32,4 +32,4 @@ async def convert(request: Request, _member: CurrentMember):
         _, stderr = await proc.communicate()
         if proc.returncode != 0:
             raise HTTPException(400, f"변환 실패: {stderr.decode(errors='ignore')[:300]}")
-        return Response(dst.read_bytes(), media_type="audio/mp4")
+        return Response(await asyncio.to_thread(dst.read_bytes), media_type="audio/mp4")

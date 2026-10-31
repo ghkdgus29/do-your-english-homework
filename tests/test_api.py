@@ -39,6 +39,55 @@ def test_admin_requires_password(client):
     assert client.get("/api/admin/weeks").status_code == 200
 
 
+def test_member_cookie_refreshed_on_each_request(client):
+    token = _member_client(client)
+    r = client.get("/api/me")
+    assert r.status_code == 200
+    assert r.cookies.get("member_token") == token  # 값은 그대로, 만료만 연장
+    assert "max-age=31536000" in r.headers["set-cookie"].lower()
+
+
+def test_admin_session_expiry(client):
+    from app import auth
+
+    now = auth._now()
+    day = auth.ONE_DAY
+
+    def with_cookie(login_at, seen_at):
+        client.cookies.clear()
+        client.cookies.set("admin_session", auth.admin_cookie_value(login_at, seen_at))
+        return client.get("/api/admin/weeks")
+
+    # 30일 안 쓰면 만료
+    assert with_cookie(now - 40 * day, now - 31 * day).status_code == 401
+    # 활동은 최근이어도 로그인 90일이 지나면 만료
+    assert with_cookie(now - 91 * day, now - 3600).status_code == 401
+    # 서명이 틀리면 거부 (마지막 글자를 반드시 다른 값으로)
+    valid = auth.admin_cookie_value(now, now)
+    tampered = valid[:-1] + ("0" if valid[-1] != "0" else "1")
+    client.cookies.clear()
+    client.cookies.set("admin_session", tampered)
+    assert client.get("/api/admin/weeks").status_code == 401
+
+    # 유효하면 요청마다 연장 (login_at은 유지, seen_at은 갱신)
+    login_at = now - 10 * day
+    r = with_cookie(login_at, now - 5 * day)
+    assert r.status_code == 200
+    new_login, new_seen, _ = r.cookies["admin_session"].split(".")
+    assert int(new_login) == login_at and int(new_seen) >= now
+
+
+def test_logs_go_to_rotating_file():
+    import logging
+
+    from app.settings import settings
+
+    logging.getLogger("app.test").info("hello-log-file")
+    log_file = settings.log_dir / "app.log"
+    assert log_file.exists()
+    assert "INFO app.test: hello-log-file" in log_file.read_text(encoding="utf-8")
+
+
 def test_member_cannot_upload(client):
     _member_client(client)
     r = client.post("/api/admin/weeks", files=[("files", ("a.jpg", b"x", "image/jpeg"))])
@@ -113,18 +162,26 @@ def test_admin_content_validation(client):
     assert client.put(f"/api/admin/weeks/{week_id}/content", json=edited).json()["title"] == "Week 50"
 
 
-def test_recording_type(client):
-    week_id = _ready_week()  # recording_type 없는 예전 콘텐츠
+def test_recording(client):
+    week_id = _ready_week()  # script가 homework 바로 아래 있는 예전 저장 형식
     _member_client(client)
     hw = client.get(f"/api/weeks/{week_id}").json()["content"]["homework"]
-    assert hw["recording_type"] == "read" and hw["questions"] == []
+    assert "script" not in hw
+    assert hw["recording"] == {"type": "read", "script": SAMPLE_CONTENT["homework"]["script"], "questions": []}
 
     _admin_login(client)
-    answer_hw = {**SAMPLE_CONTENT["homework"], "recording_type": "answer", "script": "", "questions": ["What is rich?"]}
+    legacy_hw = {**SAMPLE_CONTENT["homework"], "recording_type": "answer", "script": "", "questions": ["Old?"]}
+    r = client.put(f"/api/admin/weeks/{week_id}/content", json={**SAMPLE_CONTENT, "homework": legacy_hw})
+    assert r.json()["content"]["homework"]["recording"] == {"type": "answer", "script": "", "questions": ["Old?"]}
+
+    base_hw = {"title": "Review", "words": SAMPLE_CONTENT["homework"]["words"]}
+    answer_hw = {**base_hw, "recording": {"type": "answer", "script": "", "questions": ["What is rich?"]}}
     r = client.put(f"/api/admin/weeks/{week_id}/content", json={**SAMPLE_CONTENT, "homework": answer_hw})
-    assert r.json()["content"]["homework"]["questions"] == ["What is rich?"]
-    bad_hw = {**answer_hw, "recording_type": "sing"}
+    assert r.json()["content"]["homework"]["recording"]["questions"] == ["What is rich?"]
+    bad_hw = {**base_hw, "recording": {"type": "sing"}}
     assert client.put(f"/api/admin/weeks/{week_id}/content", json={**SAMPLE_CONTENT, "homework": bad_hw}).status_code == 422
+    mixed_hw = {**answer_hw, "script": "x"}  # 새 형식에 옛 키가 섞이면 거부
+    assert client.put(f"/api/admin/weeks/{week_id}/content", json={**SAMPLE_CONTENT, "homework": mixed_hw}).status_code == 422
 
 
 def test_reextract_starts_task(client, monkeypatch):

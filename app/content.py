@@ -1,9 +1,9 @@
 """주차 콘텐츠 구조와, 그 위에서 도는 숙제 완료 판정 / 플래시카드(SRS) 로직."""
 
 from datetime import datetime, timedelta
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.models import CardReview, HomeworkAnswer, utcnow
 
@@ -29,13 +29,31 @@ class HomeworkWord(_Strict):
     meaning: str
 
 
+class Recording(_Strict):
+    """녹음 숙제. read = 스크립트 따라 읽기(script), answer = 질문에 대답하기(questions)."""
+
+    type: Literal["read", "answer"] = "read"
+    script: str = ""
+    questions: list[str] = []
+
+
+_LEGACY_RECORDING_KEYS = {"recording_type": "type", "script": "script", "questions": "questions"}
+
+
 class Homework(_Strict):
     title: str
     words: list[HomeworkWord]
-    # 녹음 숙제: read = 스크립트 따라 읽기(script), answer = 질문에 대답하기(questions)
-    recording_type: Literal["read", "answer"] = "read"
-    script: str = ""
-    questions: list[str] = []
+    recording: Recording = Recording()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _lift_legacy_recording(cls, data: Any) -> Any:
+        """recording_type/script/questions가 homework 바로 아래 있던 예전 저장 형식을 recording 아래로 옮긴다."""
+        if not isinstance(data, dict) or "recording" in data or not (_LEGACY_RECORDING_KEYS.keys() & data.keys()):
+            return data
+        data = dict(data)
+        recording = {new: data.pop(old) for old, new in _LEGACY_RECORDING_KEYS.items() if old in data}
+        return {**data, "recording": recording}
 
 
 class WeekContent(_Strict):

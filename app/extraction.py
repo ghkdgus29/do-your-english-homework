@@ -19,8 +19,11 @@ from app.settings import settings
 log = logging.getLogger(__name__)
 
 MAX_EDGE = 2000
-# Read 결과로 이미지가 base64로 실려 와서, 여러 장을 한 번에 읽으면 SDK 기본 버퍼(1MB)를 넘는다
-MAX_BUFFER_BYTES = 32 * 1024 * 1024
+# Read 결과로 이미지가 base64로 실려 와서, 여러 장을 한 번에 읽으면 SDK 기본 버퍼(1MB)를 넘는다.
+# 2000px JPEG 한 장이 base64로 최대 2MB 정도 → 10장을 한 턴에 읽어도 남게 잡는다.
+MAX_BUFFER_BYTES = 64 * 1024 * 1024
+# 사진 한 장당 Read 1턴 + 정리 턴. 최대 10장 기준으로 여유를 둔다.
+MAX_TURNS = 25
 
 CONTENT_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -55,7 +58,7 @@ CONTENT_SCHEMA: dict[str, Any] = {
         "homework": {
             "type": "object",
             "additionalProperties": False,
-            "required": ["title", "words", "recording_type", "script", "questions"],
+            "required": ["title", "words", "recording"],
             "properties": {
                 "title": {"type": "string"},
                 "words": {
@@ -71,9 +74,16 @@ CONTENT_SCHEMA: dict[str, Any] = {
                         },
                     },
                 },
-                "recording_type": {"type": "string", "enum": ["read", "answer"]},
-                "script": {"type": "string"},
-                "questions": {"type": "array", "items": {"type": "string"}},
+                "recording": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["type", "script", "questions"],
+                    "properties": {
+                        "type": {"type": "string", "enum": ["read", "answer"]},
+                        "script": {"type": "string"},
+                        "questions": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
             },
         },
     },
@@ -107,9 +117,9 @@ homework (숙제지)
   - word: 영어 단어/표현.
   - hint: meaning 칸에 미리 인쇄돼 있는 힌트(예: "동사"). 없으면 "".
   - meaning: 학생이 정답 확인용으로 볼 간결한 한국어 뜻. hint가 있으면 그 품사의 뜻으로. (예: last + 동사 → "지속되다, 계속되다")
-- 녹음 숙제는 두 종류야. "녹음:" 뒤 지시문을 보고 분류해.
-  - "Read!"처럼 스크립트를 따라 읽는 숙제 → recording_type "read", script에 본문 전체 (제목 제외, 줄바꿈 없이 한 문단), questions는 [].
-  - "Answer the questions!"처럼 질문에 대답하는 숙제 → recording_type "answer", questions에 질문을 글머리 기호 한 줄당 1개씩 (한 줄에 질문이 여러 개면 그대로 한 항목), script는 "".
+- recording: 녹음 숙제. 두 종류야. "녹음:" 뒤 지시문을 보고 분류해.
+  - "Read!"처럼 스크립트를 따라 읽는 숙제 → type "read", script에 본문 전체 (제목 제외, 줄바꿈 없이 한 문단), questions는 [].
+  - "Answer the questions!"처럼 질문에 대답하는 숙제 → type "answer", questions에 질문을 글머리 기호 한 줄당 1개씩 (한 줄에 질문이 여러 개면 그대로 한 항목), script는 "".
 
 week_title: 외우기 자료 제목에서 주차를 뽑아 짧게 (예: "Week 49"). 없으면 숙제지 수업 날짜.
 """
@@ -136,7 +146,7 @@ async def extract_content(image_dir: Path, images: list[str]) -> dict[str, Any]:
         tools=["Read"],
         allowed_tools=["Read"],
         output_format={"type": "json_schema", "schema": CONTENT_SCHEMA},
-        max_turns=15,
+        max_turns=MAX_TURNS,
         max_buffer_size=MAX_BUFFER_BYTES,
         model=settings.claude_model,
         cli_path=settings.claude_cli_path,

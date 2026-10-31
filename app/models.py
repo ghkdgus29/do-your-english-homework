@@ -41,11 +41,29 @@ class HomeworkAnswer(SQLModel, table=True):
     member_id: int = Field(foreign_key="member.id", index=True)
     week_id: int = Field(foreign_key="week.id", index=True)
     # 단어 인덱스(str) -> {"meaning": str, "sentence": str, "peeks": int}
+    # JSON 컬럼은 안쪽만 고치면 SQLAlchemy가 변경을 모른다 (UPDATE가 안 나감).
+    # 그래서 바깥에서 직접 만지지 말고 아래 메서드로 새 dict를 통째로 대입한다.
     words: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     diary: str = ""
     recording_shared: bool = False
     completed_at: datetime | None = None
     updated_at: datetime = Field(default_factory=utcnow)
+
+    def word(self, index: int) -> dict[str, Any]:
+        """index번 단어의 답 복사본. 아직 안 썼으면 빈 답."""
+        return dict(self.words.get(str(index)) or {"meaning": "", "sentence": "", "peeks": 0})
+
+    def set_word(self, index: int, meaning: str, sentence: str) -> None:
+        """뜻·문장을 갱신한다. peeks는 유지."""
+        self._put_word(index, {**self.word(index), "meaning": meaning, "sentence": sentence})
+
+    def add_peek(self, index: int) -> None:
+        """뜻을 훔쳐본 횟수 +1."""
+        entry = self.word(index)
+        self._put_word(index, {**entry, "peeks": entry["peeks"] + 1})
+
+    def _put_word(self, index: int, entry: dict[str, Any]) -> None:
+        self.words = {**self.words, str(index): entry}
 
 
 class CardReview(SQLModel, table=True):

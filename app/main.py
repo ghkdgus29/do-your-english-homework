@@ -1,4 +1,3 @@
-import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -8,10 +7,11 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
 from app.db import engine, init_db
+from app.logs import configure_logging
 from app.models import Week
 from app.routers import admin, audio, member
 
-logging.basicConfig(level=logging.INFO)
+configure_logging()
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
